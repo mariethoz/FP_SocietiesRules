@@ -3,14 +3,14 @@ package Behavior
 import scala.util.Random
 import scala.util.Random.nextInt
 
-sealed trait AdoptedStatus
-case object Adopted extends AdoptedStatus // Mind >= 75
-case object Neutral extends AdoptedStatus   // 75 > Mind >= 40
-case object Reject extends AdoptedStatus    // 40 > Mind >= 0
+sealed trait BehaviorStatus
+case object Comply extends BehaviorStatus // Mind >= 75
+case object Neutral extends BehaviorStatus   // 75 > Mind >= 40
+case object Reject extends BehaviorStatus    // 40 > Mind >= 0
 
-case class Person(id: Int, status: AdoptedStatus, x: Int, y: Int, mindScore: Int = 50)
+case class Person(id: Int, status: BehaviorStatus, x: Int, y: Int, mindScore: Int = 50)
 
-object VirusPropagationExample {
+object AdoptedBehavior {
 
   def move(person: Person, areaSize: Int): Person = {
     val dx = nextInt(3) - 1 // -1, 0, or 1
@@ -28,25 +28,25 @@ object VirusPropagationExample {
     pop.map { p =>
       if (p.mindScore < 40) p.copy(status = Reject)
       else if (p.mindScore < 75) p.copy(status = Neutral)
-      else p.copy(status = Adopted)
+      else p.copy(status = Comply)
     }
   }
 
   def mindset(pop: Vector[Person]): Vector[Person] = {
     pop.map { p =>
       p.status match {
-        case Adopted =>
+        case Comply =>
           if (p.mindScore < 40) p.copy(status = Reject)
           else if (p.mindScore < 75) p.copy(status = Neutral)
           else p
 
         case Neutral =>
-          if (p.mindScore >= 75) p.copy(status = Adopted)
+          if (p.mindScore >= 75) p.copy(status = Comply)
           else if (p.mindScore < 40) p.copy(status = Reject)
           else p
 
         case Reject =>
-          if (p.mindScore >= 75) p.copy(status = Adopted)
+          if (p.mindScore >= 75) p.copy(status = Comply)
           else if (p.mindScore >= 40) p.copy(status = Neutral)
           else p
       }
@@ -56,26 +56,26 @@ object VirusPropagationExample {
   def observation(pop: Vector[Person], radius: Int): Vector[Person] = {
     pop.map { p =>
       p.status match {
-        case Adopted =>
+        case Comply =>
           // Count all Reject individuals within radius * 2 and Neutral within radius, excluding self.
           val nearReject = pop.count(o => o.id != p.id && o.status == Reject && distance(p, o) <= radius * 2)
           val nearNeutral = pop.count(o => o.id != p.id && o.status == Neutral && distance(p, o) <= radius)
           p.copy(mindScore = (p.mindScore - (nearReject * 3) - (nearNeutral * 1)).max(0).min(100))
         case Neutral =>
           val nearReject = pop.count(o => o.id != p.id && o.status == Reject && distance(p, o) <= radius)
-          val nearAdopted = pop.count(o => o.id != p.id && o.status == Adopted && distance(p, o) <= radius)
-          p.copy(mindScore = (p.mindScore - (nearReject * 2) + (nearAdopted * 2)).max(0).min(100))
+          val nearComply = pop.count(o => o.id != p.id && o.status == Comply && distance(p, o) <= radius)
+          p.copy(mindScore = (p.mindScore - (nearReject * 2) + (nearComply * 2)).max(0).min(100))
         case Reject =>
           val nearNeutral = pop.count(o => o.id != p.id && o.status == Neutral && distance(p, o) <= radius)
-          val nearAdopted = pop.count(o => o.id != p.id && o.status == Adopted && distance(p, o) <= radius * 2)
-          p.copy(mindScore = (p.mindScore + (nearNeutral * 1) + (nearAdopted * 3)).max(0).min(100))
+          val nearComply = pop.count(o => o.id != p.id && o.status == Comply && distance(p, o) <= radius * 2)
+          p.copy(mindScore = (p.mindScore + (nearNeutral * 1) + (nearComply * 3)).max(0).min(100))
       }
     }
   }
 
-  val symbol: Map[AdoptedStatus, Char] = Map(
+  val symbol: Map[BehaviorStatus, Char] = Map(
     Neutral -> '.',
-    Adopted -> 'A',
+    Comply -> 'C',
     Reject  -> 'R'
   )
 
