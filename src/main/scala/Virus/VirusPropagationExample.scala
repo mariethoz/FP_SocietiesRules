@@ -1,3 +1,5 @@
+package Virus
+
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random.nextInt
 
