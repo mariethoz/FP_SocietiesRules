@@ -11,8 +11,7 @@ import scalafx.scene.paint.Color
 
 object PandemiaSimGUI extends JFXApp3 {
 
-
-  val areaSize: Int = 50
+  val areaSize: Int = 100
   val pop_size: Int = 150
   val canvasSize: Int = 800
 
@@ -24,6 +23,12 @@ object PandemiaSimGUI extends JFXApp3 {
 
   var isRunning = false
   var lastUpdateTime: Long = 0L
+  var start_comply: Int = -1
+  var start_neutral: Int = -1
+  var start_reject: Int = -1
+  var start_healthy: Int = -1
+  var start_infected: Int = -1
+  var start_recovered: Int = -1
 
   override def start(): Unit = {
     def scale(value: Int, maxLogical: Int, maxVisual: Double): Double =
@@ -33,12 +38,12 @@ object PandemiaSimGUI extends JFXApp3 {
     val canvas = new Canvas(canvasSize, canvasSize)
     val gc = canvas.graphicsContext2D
 
-    val labelComply = new Label("Comply: 0")
-    val labelNeutral = new Label("Neutral: 0")
-    val labelReject = new Label("Reject: 0")
-    val labelHealthy = new Label("Healthy: 0")
-    val labelInfected = new Label("Infected: 0")
-    val labelRecovered = new Label("Recovered: 0")
+    val labelComply = new Label("Comply: 0/x")
+    val labelNeutral = new Label("Neutral: 0/x")
+    val labelReject = new Label("Reject: 0/x")
+    val labelHealthy = new Label("Healthy: 0/x")
+    val labelInfected = new Label("Infected: 0/x")
+    val labelRecovered = new Label("Recovered: 0/x")
 
     val sliderSpeed = new Slider(1, 1000, 200) {
       showTickLabels = true
@@ -58,6 +63,12 @@ object PandemiaSimGUI extends JFXApp3 {
     buttonReset.onAction = _ => {
       isRunning = false
       population = update_mindset(populationVector(pop_size, areaSize))
+      start_comply = -1
+      start_neutral = -1
+      start_reject = -1
+      start_healthy = -1
+      start_infected = -1
+      start_recovered = -1
       buttonToggle.text = "Start"
     }
 
@@ -91,7 +102,7 @@ object PandemiaSimGUI extends JFXApp3 {
 
         val drawX = scale(p.x, areaSize, canvasSize)
         val drawY = scale(p.y, areaSize, canvasSize)
-        val size = math.max(2.0, canvasSize / areaSize.toDouble) - 1.0
+        val size = math.max(3.0, canvasSize / areaSize.toDouble) - 1.0
 
         gc.fillRect(drawX, drawY, size, size)
 
@@ -112,12 +123,21 @@ object PandemiaSimGUI extends JFXApp3 {
       val infected = population.count(_.health_status == Infected)
       val recovered = population.count(_.health_status == Recovered)
 
-      labelComply.text = s"Comply: $comply"
-      labelNeutral.text = s"Neutral: $neutral"
-      labelReject.text = s"Reject: $reject"
-      labelHealthy.text = s"Healthy: $healthy"
-      labelInfected.text = s"Infected: $infected"
-      labelRecovered.text = s"Recovered: $recovered"
+      if (start_reject == -1){
+        start_comply = comply
+        start_neutral = neutral
+        start_reject = reject
+        start_healthy = healthy
+        start_infected = infected
+        start_recovered = recovered
+      }
+
+      labelComply.text = s"Comply: $comply/$start_comply"
+      labelNeutral.text = s"Neutral: $neutral/$start_neutral"
+      labelReject.text = s"Reject: $reject/$start_reject"
+      labelHealthy.text = s"Healthy: $healthy/$start_healthy"
+      labelInfected.text = s"Infected: $infected/$start_infected"
+      labelRecovered.text = s"Recovered: $recovered/$start_recovered"
       if (infected == 0) isRunning = false
     }
 

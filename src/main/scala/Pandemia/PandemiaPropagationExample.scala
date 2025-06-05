@@ -53,17 +53,15 @@ def observation(pop: Vector[Person], radius: Float): Vector[Person] = {
         val nearReject = pop.count(o => o.id != p.id && o.mind_status == Reject && distance(p, o) <= radius * 2)
         val nearNeutral = pop.count(o => o.id != p.id && o.mind_status == Neutral && distance(p, o) <= radius)
         val nearInfected = pop.count(o => o.id != p.id && o.health_status == Infected && distance(p, o) <= radius * 2)
-        val nearHealthy = pop.count(o => o.id != p.id && o.health_status == Healthy && distance(p, o) <= radius * 2)
         val positive = nearInfected * 2
-        val negative = nearHealthy * 1 + nearReject * 3 + nearNeutral * 1
+        val negative = nearReject * 3 + nearNeutral * 1
         p.copy(mind_score = clampMindScore(p.mind_score + positive - negative))
       case Neutral =>
         val nearReject = pop.count(o => o.id != p.id && o.mind_status == Reject && distance(p, o) <= radius)
         val nearComply = pop.count(o => o.id != p.id && o.mind_status == Comply && distance(p, o) <= radius)
         val nearInfected = pop.count(o => o.id != p.id && o.health_status == Infected && distance(p, o) <= radius * 2)
-        val nearHealthy = pop.count(o => o.id != p.id && o.health_status == Healthy && distance(p, o) <= radius * 2)
         val positive = nearInfected * 1 + nearComply * 2
-        val negative = nearHealthy * 1 + nearReject * 2
+        val negative = nearReject * 2
         p.copy(mind_score = clampMindScore(p.mind_score + positive - negative))
       case Reject =>
         val nearNeutral = pop.count(o => o.id != p.id && o.mind_status == Neutral && distance(p, o) <= radius)
@@ -71,7 +69,7 @@ def observation(pop: Vector[Person], radius: Float): Vector[Person] = {
         val nearInfected = pop.count(o => o.id != p.id && o.health_status == Infected && distance(p, o) <= radius * 2)
         val nearHealthy = pop.count(o => o.id != p.id && o.health_status == Healthy && distance(p, o) <= radius * 2)
         val positive = nearInfected * 1 + nearNeutral * 1 + nearComply * 3
-        val negative = nearHealthy * 2
+        val negative = 0 //nearHealthy * 2
         p.copy(mind_score = clampMindScore(p.mind_score + positive - negative))
         p.copy(mind_score = clampMindScore(p.mind_score + (nearNeutral * 1) + (nearComply * 3)))
     }
@@ -199,10 +197,29 @@ def simulate(persons: Vector[Person], areaSize: Int, steps: Int): Unit = {
   loop(persons, 1)
 }
 
-def populationVector(size: Int, areaSize: Int): Vector[Person] = {
+// Overloaded method using an Int:
+def populationVector(size: Int, areaSize: Int, initiallyInfected: Int=1): Vector[Person] = {
+  // Randomly pick indices to be infected.
+  val infectedIndices = Random.shuffle((0 until size).toList).take(initiallyInfected).toSet
   Vector.tabulate(size) { i =>
-    Person(i, Neutral, List(Infected, Healthy, Healthy)(nextInt(3)), (math.random() * areaSize).toInt, (math.random() * areaSize).toInt, (math.random() * 100).toInt)
+    val health = if (infectedIndices.contains(i)) Infected else Healthy
+    // Create a person with random coordinates and random attribute.
+    Person(
+      id = i,
+      mind_status = Neutral, // or you may choose any default or random mind status.
+      health_status = health,
+      x = (math.random() * areaSize).toInt,
+      y = (math.random() * areaSize).toInt,
+      mind_score = (math.random() * 100).toInt
+    )
   }
+}
+
+// Overloaded method using a Float (as a fraction between 0 and 1):
+def populationVector(size: Int, areaSize: Int, infectionRatio: Float): Vector[Person] = {
+  // Calculate how many persons should be infected.
+  val initiallyInfected = (size * infectionRatio).toInt
+  populationVector(size, areaSize, initiallyInfected)
 }
 
 object PandemiaPropagationExample {
