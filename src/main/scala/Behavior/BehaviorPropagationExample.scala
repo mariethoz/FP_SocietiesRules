@@ -12,13 +12,58 @@ case class Person(id: Int, status: BehaviorStatus, x: Int, y: Int, mindScore: In
 
 object AdoptedBehavior {
 
-  def move(person: Person, areaSize: Int): Person = {
-    val dx = nextInt(3) - 1 // -1, 0, or 1
-    val dy = nextInt(3) - 1
-    val newX = (person.x + dx).max(0).min(areaSize - 1)
-    val newY = (person.y + dy).max(0).min(areaSize - 1)
-    person.copy(x = newX, y = newY)
+
+  def maxDistance(p: Person, newX: Int, newY: Int, pop: Vector[Person]): Option[Double] = {
+    pop.filter(_.id != p.id) // Exclude p itself
+      .map(other => math.hypot(newX - other.x, newY - other.y)) // Compute distances
+      .minOption
   }
+
+
+  def move(person: Person, areaSize: Int, pop: Vector[Person]): Person = {
+
+    val possibleMoves = for {
+      dx <- -1 to 1
+      dy <- -1 to 1
+      newX = (person.x + dx).max(0).min(areaSize - 1)
+      newY = (person.y + dy).max(0).min(areaSize - 1)
+    } yield (newX, newY, maxDistance(person, newX, newY, pop))
+
+
+    // Apply the best move
+    person.status match {
+      case Comply => {
+        val filteredMoves = possibleMoves.collect { case (x, y, Some(dist)) if dist > 3.0 => (x, y, dist) }
+        if (filteredMoves.nonEmpty) {
+          val (nx, ny, _) = filteredMoves(Random.nextInt(filteredMoves.size))
+          person.copy(x = nx, y = ny)
+        } else person // No valid move, stay in place
+        /** To select the max distance instead of the distance
+        val bestMove = possibleMoves
+          .collect { case (x, y, Some(maxDist)) => (x, y, maxDist) } // Remove None cases
+          .sortBy(-_._3) // Sort by min distance
+          .headOption // Safely take the best move
+        bestMove match {
+          case Some((nx, ny, _)) => person.copy(x = nx, y = ny)
+          case None => person // No valid move, stay in place
+        }
+         */
+      }
+      case Neutral => {
+        // Simulate a moderate compliance of the distance rule
+        val filteredMoves = possibleMoves.collect { case (x, y, Some(dist)) if dist > 1 => (x, y, dist) }
+        if (filteredMoves.nonEmpty) {
+          val (nx, ny, _) = filteredMoves(Random.nextInt(filteredMoves.size))
+          person.copy(x = nx, y = ny)
+        } else person // No valid move, stay in place
+      }
+      case Reject => {
+        val (nx, ny, _) = possibleMoves(Random.nextInt(possibleMoves.size))
+        person.copy(x = nx, y = ny)
+      }
+    }
+  }
+
 
   def distance(p1: Person, p2: Person): Double = {
     math.hypot(p1.x - p2.x, p1.y - p2.y)
@@ -94,7 +139,7 @@ object AdoptedBehavior {
       displayPopulation(pop, areaSize)
       println(pop)
 
-      val moved = pop.map(p => move(p, areaSize))
+      val moved = pop.map(p => move(p, areaSize, pop))
       val updatedMindset = mindset(moved)
       val observed = observation(updatedMindset, radius = 2)
       loop(observed, step - 1)
@@ -102,11 +147,15 @@ object AdoptedBehavior {
     loop(population, steps)
   }
 
-  def main(args: Array[String]): Unit = {
-    val areaSize = 10
-    var population = Vector.tabulate(11) { i =>
+  def populationVector(size: Int, areaSize: Int): Vector[Person] = {
+    Vector.tabulate(size) { i =>
       Person(i, Neutral, (math.random() * areaSize).toInt, (math.random() * areaSize).toInt, (math.random() * 100).toInt)
     }
+  }
+
+  def main(args: Array[String]): Unit = {
+    val areaSize = 10
+    var population = populationVector(11, areaSize)
     println("Initial Population:")
     population = initPerson(population)
     println(population)

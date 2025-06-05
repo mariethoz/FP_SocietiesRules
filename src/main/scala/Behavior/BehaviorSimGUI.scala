@@ -1,6 +1,6 @@
 package Behavior
 
-import Behavior.AdoptedBehavior.{mindset, move, observation}
+import Behavior.AdoptedBehavior.{mindset, move, observation, populationVector}
 import scalafx.animation.AnimationTimer
 import scalafx.application.JFXApp3
 import scalafx.geometry.Insets
@@ -17,13 +17,11 @@ object BehaviorSimGUI extends JFXApp3 {
 
 
   val areaSize: Int = 100
-  val pop_size: Int = 500
-  val radius: Int = 25* areaSize/pop_size
-  val canvasSize: Int = 400
+  val pop_size: Int = 50
+  val radius: Int = 5
+  val canvasSize: Int = 800
 
-  var population: Vector[Person] = Vector.tabulate(pop_size) { i =>
-    Person(i, Neutral, Random.nextInt(areaSize), Random.nextInt(areaSize), Random.nextInt(100))
-  }
+  var population: Vector[Person] = populationVector(pop_size, areaSize)
 
   var isRunning = false
   var lastUpdateTime: Long = 0L
@@ -40,7 +38,7 @@ object BehaviorSimGUI extends JFXApp3 {
     val labelNeutral = new Label("Neutral: 0")
     val labelReject = new Label("Reject: 0")
 
-    val sliderSpeed = new Slider(100, 1000, 200) {
+    val sliderSpeed = new Slider(1, 1000, 200) {
       showTickLabels = true
       showTickMarks = true
       majorTickUnit = 300
@@ -57,9 +55,7 @@ object BehaviorSimGUI extends JFXApp3 {
     }
     buttonReset.onAction = _ => {
       isRunning = false
-      population = Vector.tabulate(pop_size) { i =>
-        Person(i, Neutral, Random.nextInt(areaSize), Random.nextInt(areaSize), Random.nextInt(100))
-      }
+      population = populationVector(pop_size, areaSize)
       buttonToggle.text = "Start"
     }
 
@@ -112,7 +108,7 @@ object BehaviorSimGUI extends JFXApp3 {
     val timer = AnimationTimer { now =>
       val delay = (sliderSpeed.value() * 1_000_000).toLong
       if (isRunning && now - lastUpdateTime > delay) {
-        population = population.map(p => move(p, areaSize))
+        population = population.map(p => move(p, areaSize, population))
         population = mindset(population)
         population = observation(population, radius = radius)
         draw()
