@@ -5,14 +5,13 @@ import scalafx.application.Platform
 import scalafx.scene.Scene
 import scalafx.scene.canvas.{Canvas, GraphicsContext}
 import scalafx.scene.paint.Color
-import scalafx.scene.chart.{LineChart, NumberAxis, StackedAreaChart, XYChart}
+import scalafx.scene.chart.{NumberAxis, StackedAreaChart, XYChart}
 import scalafx.scene.layout.{HBox, VBox}
 import scalafx.animation.AnimationTimer
 import scalafx.collections.ObservableBuffer
 import scalafx.geometry.Insets
 import scalafx.scene.control.{Button, Label, Slider}
 
-import scala.concurrent.Future
 
 
 object PandemiaSim extends JFXApp3 {
