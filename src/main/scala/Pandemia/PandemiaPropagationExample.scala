@@ -34,8 +34,8 @@ def distance(p1: Person, p2: Person): Double = {
   math.hypot(p1.x - p2.x, p1.y - p2.y)
 }
 def behaviorFromScore(score: Int): BehaviorStatus = {
-  if (score >= 75) Comply
-  else if (score >= 40) Neutral
+  if (score >= 66) Comply
+  else if (score >= 33) Neutral
   else Reject
 }
 
@@ -50,10 +50,11 @@ def observation(pop: Vector[Person], radius: Float): Vector[Person] = {
     p.mind_status match {
       case Comply =>
         // Count all Reject individuals within radius * 2 and Neutral within radius, excluding self.
-        val nearReject = pop.count(o => o.id != p.id && o.mind_status == Reject && distance(p, o) <= radius * 2)
+        val nearReject = pop.count(o => o.id != p.id && o.mind_status == Reject && distance(p, o) <= radius )
         val nearNeutral = pop.count(o => o.id != p.id && o.mind_status == Neutral && distance(p, o) <= radius)
+        val nearComply = pop.count(o => o.id != p.id && o.mind_status == Comply && distance(p, o) <= radius)
         val nearInfected = pop.count(o => o.id != p.id && o.health_status == Infected && distance(p, o) <= radius * 2)
-        val positive = nearInfected * 2
+        val positive = nearInfected * 2 + nearComply * 1
         val negative = nearReject * 3 + nearNeutral * 1
         p.copy(mind_score = clampMindScore(p.mind_score + positive - negative))
       case Neutral =>
@@ -64,14 +65,14 @@ def observation(pop: Vector[Person], radius: Float): Vector[Person] = {
         val negative = nearReject * 2
         p.copy(mind_score = clampMindScore(p.mind_score + positive - negative))
       case Reject =>
+        val nearReject = pop.count(o => o.id != p.id && o.mind_status == Reject && distance(p, o) <= radius)
         val nearNeutral = pop.count(o => o.id != p.id && o.mind_status == Neutral && distance(p, o) <= radius)
-        val nearComply = pop.count(o => o.id != p.id && o.mind_status == Comply && distance(p, o) <= radius * 2)
+        val nearComply = pop.count(o => o.id != p.id && o.mind_status == Comply && distance(p, o) <= radius)
         val nearInfected = pop.count(o => o.id != p.id && o.health_status == Infected && distance(p, o) <= radius * 2)
         val nearHealthy = pop.count(o => o.id != p.id && o.health_status == Healthy && distance(p, o) <= radius * 2)
         val positive = nearInfected * 1 + nearNeutral * 1 + nearComply * 3
-        val negative = 0 //nearHealthy * 2
+        val negative = nearReject * 1 //nearHealthy * 2
         p.copy(mind_score = clampMindScore(p.mind_score + positive - negative))
-        p.copy(mind_score = clampMindScore(p.mind_score + (nearNeutral * 1) + (nearComply * 3)))
     }
   }
 }

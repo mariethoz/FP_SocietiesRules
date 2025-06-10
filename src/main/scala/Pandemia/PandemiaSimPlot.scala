@@ -16,8 +16,8 @@ object PandemiaSimPlot extends JFXApp3 {
   val infection_radius: Float = 2f
   val virus_infection_chance: Float = 0.9f
   val observation_radius: Float = 3.0f
-  val areaSize: Int = 200
-  val pop_size: Int = 5000
+  val areaSize: Int = 100
+  val pop_size: Int = 1000
 
   // Define series
   val healthySeries = new XYChart.Series[Number, Number] { name = "Healthy" }
