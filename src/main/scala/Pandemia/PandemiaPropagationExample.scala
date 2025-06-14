@@ -1,5 +1,8 @@
 package Pandemia
 
+import jdk.jfr.Threshold
+
+import scala.collection.MapView
 import scala.util.Random
 import scala.util.Random.nextInt
 
@@ -14,68 +17,152 @@ case object Healthy extends HealthStatus
 case object Infected extends HealthStatus
 case object Recovered extends HealthStatus
 
-val observation_radius: Float = 5
+val observation_radius: Int = 5
 val infection_radius: Float = 3
 val virus_infection_chance: Float = 0.7
 
 case class Person(id: Int, mind_status: BehaviorStatus = Neutral, health_status: HealthStatus = Healthy, x: Int, y: Int, mind_score: Int = 50, recovery_time: Int = 7) {
-  def get_transmission_chance(): Float = {
-    if (health_status == Infected) {
-      mind_status match {
-        case Comply => 0.2
-        case Neutral => 0.8
-        case Reject => 1
-      }
-    } else 0
+  def get_transmission_chance: Float = (health_status, mind_status) match {
+    case (Infected, Comply) => 0.2
+    case (Infected, Neutral) => 0.8
+    case (Infected, Reject) => 1.0
+    case _ => 0.0
+  }
+
+  def get_personal_health_modifier: Int = health_status match {
+    case Healthy => -1
+    case Infected => 3
+    case Recovered => -2
   }
 }
 
 def distance(p1: Person, p2: Person): Double = {
   math.hypot(p1.x - p2.x, p1.y - p2.y)
 }
+
 def behaviorFromScore(score: Int): BehaviorStatus = {
-  if (score >= 66) Comply
-  else if (score >= 33) Neutral
+  if (score >= 75) Comply
+  else if (score >= 40) Neutral
   else Reject
 }
 
-def update_mindset(pop: Vector[Person]): Vector[Person] = {
-  pop.map(p => p.copy(mind_status = behaviorFromScore(p.mind_score)))
-}
-
-def clampMindScore(score: Int): Int = score.max(0).min(100)
-
-def observation(pop: Vector[Person], radius: Float): Vector[Person] = {
+def updateMindset(pop: Vector[Person],
+                  thresholdComply: Int = 10,
+                  thresholdReject: Int = -10,
+                  thresholdNeutralUpper: Int = 5,
+                  thresholdNeutralLower: Int = -5): Vector[Person] = {
   pop.map { p =>
-    p.mind_status match {
-      case Comply =>
-        // Count all Reject individuals within radius * 2 and Neutral within radius, excluding self.
-        val nearReject = pop.count(o => o.id != p.id && o.mind_status == Reject && distance(p, o) <= radius )
-        val nearNeutral = pop.count(o => o.id != p.id && o.mind_status == Neutral && distance(p, o) <= radius)
-        val nearComply = pop.count(o => o.id != p.id && o.mind_status == Comply && distance(p, o) <= radius)
-        val nearInfected = pop.count(o => o.id != p.id && o.health_status == Infected && distance(p, o) <= radius * 2)
-        val positive = nearInfected * 2 + nearComply * 1
-        val negative = nearReject * 3 + nearNeutral * 1
-        p.copy(mind_score = clampMindScore(p.mind_score + positive - negative))
-      case Neutral =>
-        val nearReject = pop.count(o => o.id != p.id && o.mind_status == Reject && distance(p, o) <= radius)
-        val nearComply = pop.count(o => o.id != p.id && o.mind_status == Comply && distance(p, o) <= radius)
-        val nearInfected = pop.count(o => o.id != p.id && o.health_status == Infected && distance(p, o) <= radius * 2)
-        val positive = nearInfected * 1 + nearComply * 2
-        val negative = nearReject * 2
-        p.copy(mind_score = clampMindScore(p.mind_score + positive - negative))
-      case Reject =>
-        val nearReject = pop.count(o => o.id != p.id && o.mind_status == Reject && distance(p, o) <= radius)
-        val nearNeutral = pop.count(o => o.id != p.id && o.mind_status == Neutral && distance(p, o) <= radius)
-        val nearComply = pop.count(o => o.id != p.id && o.mind_status == Comply && distance(p, o) <= radius)
-        val nearInfected = pop.count(o => o.id != p.id && o.health_status == Infected && distance(p, o) <= radius * 2)
-        val nearHealthy = pop.count(o => o.id != p.id && o.health_status == Healthy && distance(p, o) <= radius * 2)
-        val positive = nearInfected * 1 + nearNeutral * 1 + nearComply * 3
-        val negative = nearReject * 1 //nearHealthy * 2
-        p.copy(mind_score = clampMindScore(p.mind_score + positive - negative))
+    val newMindStatus = p.mind_score match {
+      case score if score >= thresholdComply =>
+        Comply
+      case score if score <= thresholdReject =>
+        Reject
+      case score if score > thresholdNeutralLower && score < thresholdNeutralUpper =>
+        Neutral
+      case _ => p.mind_status // Retain current status if in overlapping zone
     }
+    p.copy(mind_status = newMindStatus)
   }
 }
+
+
+def observation(pop: Vector[Person], radius: Int, considerHealth: Boolean = false): Vector[Person] = {
+  val neighborsWithinRadius: Map[Int, Vector[Person]] =
+    pop.map(p => p.id -> pop.filter(o => o.id != p.id && distance(p, o) <= radius)).toMap
+
+  // Define the payoff matrix for the mind state interaction as a function
+  // Each branch computes a tuple (totalReward, totalCost) based on neighbor counts.
+  def calculatePayoff(p: Person, nearComply: Int, nearNeutral: Int, nearReject: Int,
+                       nearHealthy: Int, nearInfected: Int, nearRecovered: Int): Int = {
+    p.mind_status match {
+    case Comply =>
+      // Comply individuals:
+      // - Reward when people adhere to the rules (nearComply).
+      // - Some positive bonus for neutrals (they’re mildly proud).
+      // - Cost when they see rejecting.
+      if (!considerHealth) {
+        nearComply * 2 + nearNeutral * 1 - nearReject * 5
+      } else {
+        // - As they saw infection they fear infection
+        // - They know that recovered people do not transmit disease
+        nearComply * 2 + nearNeutral * 1 - nearReject * 5 + nearInfected * 2 - nearRecovered
+      }
+
+    case Neutral =>
+      // Neutral individuals:
+      // - Their behavior is driven by the majority in their vicinity.
+      //   We determine the majority and reward them accordingly.
+      // - Their cost is derived from the conflicting minority influences.
+      val majorityCount = Math.max(nearComply, Math.max(nearNeutral, nearReject))
+      val healthCost: Int =
+        if (!considerHealth) {
+          0
+        } else {
+          // - As they saw infection they fear infection
+          // - They know that recovered people do not transmit disease
+          nearInfected * 2 - nearRecovered * 2
+        }
+      if (majorityCount == nearComply) {
+        // Predominantly compliant environment: moderate reward from compliance influence.
+        nearComply * 7 - nearNeutral * 5 + healthCost
+      } else if (majorityCount == nearReject) {
+        // Predominantly rejecting: they might feel the rebellious pull.
+        nearReject * -7 + nearNeutral * 5
+      } else {
+        0 + healthCost
+      }
+
+    case Reject =>
+      // Reject individuals:
+      // - Inspired by compliant neighbors gives them a reward.
+      // - However, many reject neighbors act as a reminder force if around comply.
+      // - Neutral neighbors reinforce  their behavior.
+      val healthCost: Int =
+        if (!considerHealth) {
+          0
+        } else {
+          // - They may not fear infection if many people are healthy
+          // - Even through, the infection is reminded
+          // - They know that recovered people do not transmit disease
+          nearInfected * 2 - nearHealthy - nearRecovered * 2
+        }
+      if (nearComply > 0)
+        nearComply * 5 + nearReject * 2 - nearNeutral * 5
+      else
+        - nearReject * 2 - nearNeutral * 5
+    }
+  }
+
+  pop.map { p =>
+    val buckets: Map[(Int, Int), Vector[Person]] =
+      pop.groupBy(p => (p.x / radius, p.y / radius))
+    val (bx, by) = (p.x / radius, p.y / radius)
+    val candidates = for {
+      dx <- -1 to 1
+      dy <- -1 to 1
+      neighbor <- buckets.getOrElse((bx + dx, by + dy), Vector.empty)
+      if neighbor.id != p.id && distance(p, neighbor) <= radius
+    } yield neighbor
+
+    val mindCounts = candidates.groupBy(_.mind_status).view.mapValues(_.size)
+    val healthCounts = candidates.groupBy(_.health_status).view.mapValues(_.size)
+
+
+    val nearReject = mindCounts.getOrElse(Reject, 0)
+    val nearNeutral = mindCounts.getOrElse(Neutral, 0)
+    val nearComply = mindCounts.getOrElse(Comply, 0)
+
+    // (Optional) Use health counts later or to further modify the score
+    val nearInfected = healthCounts.getOrElse(Infected, 0)
+    val nearHealthy = healthCounts.getOrElse(Healthy, 0)
+    val nearRecovered = healthCounts.getOrElse(Recovered, 0)
+
+    // Calculate the reward and cost from all interactions.
+    p.copy(mind_score = calculatePayoff(p, nearComply, nearNeutral, nearReject,
+      nearHealthy, nearInfected, nearRecovered) + p.get_personal_health_modifier )
+  }
+}
+
 
 def minDistance(p: Person, newX: Int, newY: Int, pop: Vector[Person]): Option[Double] = {
   pop.filter(_.id != p.id) // Exclude p itself
@@ -132,27 +219,28 @@ def move(population: Vector[Person], areaSize: Int): Vector[Person] = {
   }
 }
 
+
 def infect(population: Vector[Person], infection_radius: Float, base_infection_chance: Float): Vector[Person] = {
+  val infectedPeople = population.filter(_.health_status == Infected) // Pre-filter infected persons
   population.map { p =>
-    if (p.health_status == Healthy) {
-      // Find all infected neighbors within the specified radius.
-      val infectedNeighbours = population.filter { other =>
-        other.health_status == Infected && distance(p, other) <= infection_radius
-      }
-      // Check if at least one neighbor successfully infects p.
-      // Each neighbor's chance is modulated by its get_transmission_chance.
-      val willBeInfected = infectedNeighbours.exists { neighbour =>
-        math.random < (base_infection_chance * neighbour.get_transmission_chance())
-      }
-      if (willBeInfected) p.copy(health_status = Infected) else p
-    } else if (p.health_status == Infected) {
-      // Update recovery: if it's the last day, set to Recovered; otherwise decrement recovery_time.
-      if (p.recovery_time <= 1)
-        p.copy(health_status = Recovered)
-      else
-        p.copy(recovery_time = p.recovery_time - 1)
-    } else {
-      p
+    p.health_status match {
+      case Healthy =>
+        // Find nearby infected individuals
+        val nearbyInfected = infectedPeople.filter(o => distance(p, o) <= infection_radius)
+        // Determine infection probability
+        val willBeInfected = nearbyInfected.foldLeft(false) { (acc, neighbour) =>
+          acc || math.random < (base_infection_chance * neighbour.get_transmission_chance)
+        }
+        if (willBeInfected) p.copy(health_status = Infected) else p
+      case Infected =>
+        // Manage recovery
+        p.copy(health_status = if (p.recovery_time <= 1) Recovered else Infected, recovery_time = p.recovery_time - 1)
+      case Recovered =>
+        if (p.recovery_time <= -21)
+          p.copy(health_status = Healthy, recovery_time = 7)
+        else
+          p.copy(recovery_time = p.recovery_time - 1)
+      case _ => p
     }
   }
 }
@@ -191,43 +279,47 @@ def simulate(persons: Vector[Person], areaSize: Int, steps: Int): Unit = {
     val moved = move(pop, areaSize)
     val infected = infect(moved, infection_radius, virus_infection_chance)
     val pop_observed = observation(infected, observation_radius)
-    val pop_mind = update_mindset(pop_observed)
+    val pop_mind = updateMindset(pop_observed)
     loop(pop_mind, step + 1)
   }
 
   loop(persons, 1)
 }
 
-// Overloaded method using an Int:
-def populationVector(size: Int, areaSize: Int, initiallyInfected: Int=1): Vector[Person] = {
-  // Randomly pick indices to be infected.
-  val infectedIndices = Random.shuffle((0 until size).toList).take(initiallyInfected).toSet
+def populationVector(size: Int, areaSize: Int, numComply: Int = 0, numReject: Int = 0, initiallyInfected: Int = 1): Vector[Person] = {
+  if (numComply + numReject > size) Vector.empty[Person]
+  val numNeutral = size - numComply - numReject
+
+  // Shuffle indices to randomize mind status assignments
+  val shuffledIndices = Random.shuffle((0 until size).toList)
+
+  val complySet = shuffledIndices.take(numComply).toSet
+  val rejectSet = shuffledIndices.slice(numComply, numComply + numReject).toSet
+  val infectedSet = Random.shuffle(shuffledIndices).take(initiallyInfected).toSet
+
   Vector.tabulate(size) { i =>
-    val health = if (infectedIndices.contains(i)) Infected else Healthy
-    // Create a person with random coordinates and random attribute.
+    val healthStatus = if (infectedSet.contains(i)) Infected else Healthy
+    val mindScore = if (complySet.contains(i)) 45
+    else if (rejectSet.contains(i)) -45
+    else 0
+
     Person(
       id = i,
-      mind_status = Neutral, // or you may choose any default or random mind status.
-      health_status = health,
+      mind_status = Neutral,
+      health_status = healthStatus,
       x = (math.random() * areaSize).toInt,
       y = (math.random() * areaSize).toInt,
-      mind_score = (math.random() * 100).toInt
+      mind_score = mindScore
     )
   }
 }
 
-// Overloaded method using a Float (as a fraction between 0 and 1):
-def populationVector(size: Int, areaSize: Int, infectionRatio: Float): Vector[Person] = {
-  // Calculate how many persons should be infected.
-  val initiallyInfected = (size * infectionRatio).toInt
-  populationVector(size, areaSize, initiallyInfected)
-}
 
 object PandemiaPropagationExample {
   def main(args: Array[String]): Unit = {
     val areaSize = 10
     var population = populationVector(11, areaSize)
-    population = update_mindset(population)
+    population = updateMindset(population)
     println(population)
     simulate(population, areaSize, 10)
   }

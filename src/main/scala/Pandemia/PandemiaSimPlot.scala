@@ -15,7 +15,7 @@ object PandemiaSimPlot extends JFXApp3 {
   // Define constants
   val infection_radius: Float = 2f
   val virus_infection_chance: Float = 0.9f
-  val observation_radius: Float = 3.0f
+  val observation_radius: Int = 5
   val areaSize: Int = 100
   val pop_size: Int = 1000
 
@@ -76,7 +76,7 @@ object PandemiaSimPlot extends JFXApp3 {
   def runSimulation(steps: Int): Unit = {
     Future {
       var pop = populationVector(size = pop_size, areaSize = areaSize, initiallyInfected = 100)
-      pop = update_mindset(pop)
+      pop = updateMindset(pop)
       for (step <- 0 until steps) {
         val h = pop.count(_.health_status == Healthy)
         val i = pop.count(_.health_status == Infected)
@@ -101,7 +101,7 @@ object PandemiaSimPlot extends JFXApp3 {
         pop = move(pop, areaSize)
         pop = infect(pop, infection_radius, virus_infection_chance)
         pop = observation(pop, observation_radius)
-        pop = update_mindset(pop)
+        pop = updateMindset(pop)
 
         Thread.sleep(100) // control update speed
       }

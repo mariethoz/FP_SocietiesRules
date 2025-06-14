@@ -5,7 +5,7 @@ import scalafx.application.JFXApp3
 import scalafx.geometry.Insets
 import scalafx.scene.Scene
 import scalafx.scene.canvas.Canvas
-import scalafx.scene.control.{Button, Label, Slider}
+import scalafx.scene.control.{Button, Label, Slider, TextField}
 import scalafx.scene.layout.{HBox, VBox}
 import scalafx.scene.paint.Color
 
@@ -15,7 +15,7 @@ object PandemiaSimGUI extends JFXApp3 {
   val pop_size: Int = 150
   val canvasSize: Int = 800
 
-  val observation_radius: Float = 5
+  val observation_radius: Int = 5
   val infection_radius: Float = 3
   val virus_infection_chance: Float = 0.9
 
@@ -45,14 +45,30 @@ object PandemiaSimGUI extends JFXApp3 {
     val labelInfected = new Label("Infected: 0/x")
     val labelRecovered = new Label("Recovered: 0/x")
 
-    val sliderSpeed = new Slider(1, 1000, 200) {
-      showTickLabels = true
-      showTickMarks = true
-      majorTickUnit = 300
-      minorTickCount = 2
-      blockIncrement = 100
+    // New text fields for simulation parameters:
+    val popSizeInput = new TextField {
+      text = "150" // default population size
+      prefWidth = 80
+    }
+    val initialInfectedInput = new TextField {
+      text = "1" // default initial infected count
+      prefWidth = 80
+    }
+    val complyInput = new TextField {
+      text = "50" // default ratio of complying people (e.g., 20% of population)
+      prefWidth = 80
+    }
+    val rejectInput = new TextField {
+      text = "50" // default ratio of rejecting people (e.g., 20% of population)
+      prefWidth = 80
+    }
+    val speedInput = new TextField {
+      text = "200" // default speed in ms
+      prefWidth = 80
     }
 
+
+    // Main action buttons:
     val buttonToggle = new Button("Start")
     val buttonReset = new Button("Reset")
 
@@ -60,31 +76,50 @@ object PandemiaSimGUI extends JFXApp3 {
       isRunning = !isRunning
       buttonToggle.text = if (isRunning) "Pause" else "Resume"
     }
+
     buttonReset.onAction = _ => {
+      // When Reset is clicked, read input from our text fields.
       isRunning = false
-      population = update_mindset(populationVector(pop_size, areaSize))
+
+      // Convert input values safely, with a default fallback.
+      val newSize = popSizeInput.text().toIntOption.getOrElse(150)
+      val newInitialInfected = initialInfectedInput.text().toIntOption.getOrElse(1)
+      val newComply = complyInput.text().toIntOption.getOrElse(0)
+      val newReject = rejectInput.text().toIntOption.getOrElse(0)
+
+      // Create a fresh population with the specified parameters.
+      population = updateMindset(populationVector(newSize, areaSize, newComply, newReject, newInitialInfected))
+
+      // Reset counters.
       start_comply = -1
       start_neutral = -1
       start_reject = -1
       start_healthy = -1
       start_infected = -1
       start_recovered = -1
+
       buttonToggle.text = "Start"
     }
 
-    val layout = new VBox(10) {
+    val layout = new HBox(10) {
       padding = Insets(10)
       children = Seq(
-        canvas,
-        new HBox(10, labelComply, labelNeutral, labelReject),
-        new HBox(10, labelHealthy, labelInfected, labelRecovered),
-        new HBox(10, new Label("Speed (ms):"), sliderSpeed, buttonToggle, buttonReset)
+        new VBox(10,
+          new Label("Population Size:"), popSizeInput,
+          new Label("Initial Infected:"), initialInfectedInput,
+          new Label("Initial Complying:"), complyInput,
+          new Label("Initial Rejecting:"), rejectInput,
+          new HBox(10, labelComply, labelNeutral, labelReject),
+          new HBox(10, labelHealthy, labelInfected, labelRecovered),
+          new HBox(10, new Label("Speed (ms):"), speedInput, buttonToggle, buttonReset)
+        ),
+        canvas
       )
     }
 
     stage = new JFXApp3.PrimaryStage {
       title.value = "Pandemia Simulation"
-      scene = new Scene(canvasSize + 20, canvasSize + 100) {
+      scene = new Scene() {
         content = layout
       }
     }
@@ -142,10 +177,10 @@ object PandemiaSimGUI extends JFXApp3 {
     }
 
     val timer = AnimationTimer { now =>
-      val delay = (sliderSpeed.value() * 1_000_000).toLong
+      val delay = (speedInput.text().toIntOption.getOrElse(200) * 1_000_000).toLong
       if (isRunning && now - lastUpdateTime > delay) {
         population = move(population,areaSize)
-        population = update_mindset(population)
+        population = updateMindset(population)
         population = infect(population, infection_radius, virus_infection_chance)
         population = observation(population, radius = observation_radius)
         draw()

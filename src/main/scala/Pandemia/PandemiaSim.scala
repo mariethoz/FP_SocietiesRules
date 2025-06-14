@@ -10,7 +10,7 @@ import scalafx.scene.layout.{HBox, VBox}
 import scalafx.animation.AnimationTimer
 import scalafx.collections.ObservableBuffer
 import scalafx.geometry.Insets
-import scalafx.scene.control.{Button, Label, Slider}
+import scalafx.scene.control.{Button, Label, Slider, TextField, ToggleButton}
 
 
 
@@ -23,7 +23,6 @@ object PandemiaSim extends JFXApp3 {
 
   val areaSize: Int = 100
   val canvasSize: Int = 500
-  val maxPopSize: Int = 1000
 
   // Define series
   val healthySeries = new XYChart.Series[Number, Number] { name = "Healthy" }
@@ -44,9 +43,12 @@ object PandemiaSim extends JFXApp3 {
   var start_infected: Int = -1
   var start_recovered: Int = -1
 
-  var pop_size: Int = 100
-  var initial_infected: Int = 100
-  var population = update_mindset(populationVector(size = pop_size, areaSize = areaSize, initiallyInfected = initial_infected))
+  var pop_size: Int = 150
+  var initial_infected: Int = 1
+  var initial_comply: Int = 50
+  var initial_reject: Int = 50
+
+  var population = updateMindset(populationVector(pop_size, areaSize, initial_comply, initial_reject, initial_infected))
   var step: Int = 0
 
   // Define canvas
@@ -54,6 +56,7 @@ object PandemiaSim extends JFXApp3 {
   val gc: GraphicsContext = canvas.graphicsContext2D
 
   override def start(): Unit = {
+    drawPopulation()
 
     val labelComply = new Label("Comply: 0/x")
     val labelNeutral = new Label("Neutral: 0/x")
@@ -87,60 +90,34 @@ object PandemiaSim extends JFXApp3 {
       labelRecovered.text = s"Recovered: $recovered/$start_recovered"
     }
 
-    val sliderSpeed = new Slider(1, 1000, 200) {
-      showTickLabels = true
-      showTickMarks = true
-      majorTickUnit = 300
-      minorTickCount = 1
-      blockIncrement = 100
-    }
 
-    val sliderInfected = new Slider(0, maxPopSize, initial_infected) {
-      showTickLabels = true
-      showTickMarks = true
-      majorTickUnit = 100
-      minorTickCount = 0
-      blockIncrement = 1
-    }
+    // New text fields for simulation parameters:
+    val popSizeInput = new TextField { text = "150"; prefWidth = 80 }
+    val initialInfectedInput = new TextField { text = "1"; prefWidth = 80 }
+    val complyInput = new TextField { text = "50"; prefWidth = 80 }
+    val rejectInput = new TextField { text = "50"; prefWidth = 80 }
+    val speedInput = new TextField { text = "200"; prefWidth = 80 }
 
-    val slidePopSize = new Slider(1, maxPopSize, pop_size) {
-      showTickLabels = true
-      showTickMarks = true
-      majorTickUnit = 500
-      minorTickCount = 1
-      blockIncrement = 1
-    }
+    val infectionRadiusInput = new TextField { text = "3"; prefWidth = 80 }
+    val observationRadiusInput = new TextField { text = "5"; prefWidth = 80 }
+    val infectionChanceInput = new TextField { text = "90"; prefWidth = 80 } // percentage
+
+    val healthInfluence = new ToggleButton("Health influence")
 
     val buttonToggle = new Button("Start")
     val buttonReset = new Button("Reset")
 
     // Axes
-    val xAxis1 = new NumberAxis() {
-      label = "Step"
-    }
-    val yAxis1 = new NumberAxis {
-      label = "Population"
-      lowerBound = 0
-      upperBound = pop_size         // Fixed upper bound
-      tickUnit = pop_size / 10      // Optional: set some tick spacing
-      autoRanging = false // Disable auto-ranging to keep axis fixed
-    }
-
-    val xAxis2 = new NumberAxis() {
-      label = "Step"
-    }
-    val yAxis2 = new NumberAxis {
-      label = "Population"
-      lowerBound = 0
-      upperBound = pop_size
-      tickUnit = pop_size / 10
-      autoRanging = false
-    }
+    val xAxis1 = new NumberAxis() { label = "Step" }
+    val yAxis1 = new NumberAxis { label = "Population"; lowerBound = 0; upperBound = pop_size; tickUnit = pop_size / 10; autoRanging = false }
+    val xAxis2 = new NumberAxis() { label = "Step" }
+    val yAxis2 = new NumberAxis { label = "Population"; lowerBound = 0; upperBound = pop_size; tickUnit = pop_size / 10; autoRanging = false }
 
     buttonToggle.onAction = _ => {
       isRunning = !isRunning
       buttonToggle.text = if (isRunning) "Pause" else "Resume"
     }
+
     buttonReset.onAction = _ => {
       isRunning = false
 
@@ -153,9 +130,16 @@ object PandemiaSim extends JFXApp3 {
       rejectSeries.data().clear()
 
       // Reset state
-      pop_size = slidePopSize.value().toInt
-      initial_infected = math.min(sliderInfected.value().toInt,pop_size)
-      population = update_mindset(populationVector(pop_size, areaSize, initial_infected))
+
+      // Convert input values safely, with a default fallback.
+      pop_size = popSizeInput.text().toIntOption.getOrElse(150)
+      initial_infected = math.min(initialInfectedInput.text().toIntOption.getOrElse(1),pop_size)
+      initial_comply = math.min(complyInput.text().toIntOption.getOrElse(0),pop_size)
+      initial_reject = math.min(rejectInput.text().toIntOption.getOrElse(0),pop_size)
+
+      // Create a fresh population with the specified parameters.
+      population = updateMindset(populationVector(pop_size, areaSize, initial_comply, initial_reject, initial_infected))
+
       start_comply = -1
       start_neutral = -1
       start_reject = -1
@@ -166,6 +150,7 @@ object PandemiaSim extends JFXApp3 {
       buttonToggle.text = "Start"
       step = 0
       updateCounters()
+      drawPopulation()
       yAxis1.upperBound = pop_size
       yAxis2.upperBound = pop_size
       yAxis1.tickUnit = pop_size/10
@@ -188,31 +173,40 @@ object PandemiaSim extends JFXApp3 {
           spacing = 20
           padding = Insets(10)
           children = Seq(
-            new VBox(10) {
-              children = Seq(
-                canvas,
-                new HBox(10, labelComply, labelNeutral, labelReject),
-                new HBox(10, labelHealthy, labelInfected, labelRecovered),
-                new HBox(10, new Label("Speed  (ms):"), sliderSpeed, buttonToggle),
-                new HBox(10, new Label("Population :"), slidePopSize),
-                new HBox(10, new Label("Infected   :"), sliderInfected, buttonReset)
-              )
-            },
-            new VBox(10) {
-              children = Seq(
+            new VBox(10,
+              new Label("Population Size:"), popSizeInput,
+              new Label("Initial Infected:"), initialInfectedInput,
+              healthInfluence,
+              new Label("Initial Complying:"), complyInput,
+              new Label("Initial Rejecting:"), rejectInput,
+              new Label("Infection Radius:"), infectionRadiusInput,
+              new Label("Observation Radius:"), observationRadiusInput,
+              new Label("Infection Chance (%):"), infectionChanceInput,
+              new HBox(10, labelComply, labelNeutral, labelReject),
+              new HBox(10, labelHealthy, labelInfected, labelRecovered),
+              new HBox(10, new Label("Speed (ms):"), speedInput, buttonToggle, buttonReset)
+            ),
+            new VBox(10,
+                canvas
+            ),
+            new VBox(10,
                 healthChart,
                 mindChart
-              )
-            }
+            )
           )
         }
       }
     }
     // Animation loop
     val timer = AnimationTimer { now =>
-      val delay = (sliderSpeed.value() * 1_000_000).toLong
+      val delay = (speedInput.text().toIntOption.getOrElse(200) * 1_000_000).toLong
       if (isRunning && now - lastUpdateTime > delay) {
-        simulateStep()
+        simulateStep(
+          infectionRadiusInput.text().toFloatOption.getOrElse(3f),
+          observationRadiusInput.text().toIntOption.getOrElse(5),
+          infectionChanceInput.text().toFloatOption.getOrElse(90f) / 100f,
+          healthInfluence.isSelected
+        )
         drawPopulation()
         updateCounters()
         lastUpdateTime = now
@@ -223,7 +217,7 @@ object PandemiaSim extends JFXApp3 {
   }
 
 
-  def simulateStep(): Unit = {
+  def simulateStep(infectionRadius: Float, observationRadius: Int, infectionChance: Float, healthInfluence: Boolean): Unit = {
     val h = population.count(_.health_status == Healthy)
     val i = population.count(_.health_status == Infected)
     val r = population.count(_.health_status == Recovered)
@@ -245,9 +239,9 @@ object PandemiaSim extends JFXApp3 {
 
     // Simulation step
     population = move(population, areaSize)
-    population = infect(population, infection_radius, virus_infection_chance)
-    population = observation(population, observation_radius)
-    population = update_mindset(population)
+    population = infect(population, infectionRadius, infectionChance)
+    population = observation(population, observationRadius, healthInfluence)
+    population = updateMindset(population)
   }
 
   def drawPopulation(): Unit = {

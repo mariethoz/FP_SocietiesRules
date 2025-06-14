@@ -24,26 +24,27 @@ def saveChartAsPNG(chart: StackedAreaChart[Number, Number], filename: String): U
 
 object PandemiaTransition extends JFXApp3 {
   // Define constants
-  val observation_radius: Float = 5
-  val infection_radius: Float = 3
+  val observation_radius: Int = 5
+  val infection_radius: Float = 2
   val virus_infection_chance: Float = 0.9
 
   val areaSize: Int = 100
   val stepPopSize: Int = 100
   val maxPopSize: Int = 1000
 
-  var population = update_mindset(populationVector(size = 1, areaSize = areaSize, initiallyInfected = 0))
+  var population = updateMindset(populationVector(size = 1, areaSize = areaSize, initiallyInfected = 0))
 
   def simulation(limitSteps: Int, numSim: Int): List[BehaviorData] = {
     (100 to maxPopSize by stepPopSize).map { popSize =>
+      val thirdPop = (popSize.toFloat/3).toInt
       val (totalC, totalN, totalJ) = (1 to numSim).foldLeft((0f, 0f, 0f)) { (acc, _) =>
         // Create a fresh population for each simulation run
-        var pop = update_mindset(populationVector(size = popSize, areaSize = areaSize, initiallyInfected = 0))
+        var pop = updateMindset(populationVector(size = popSize, areaSize = areaSize, initiallyInfected = 0, numReject = thirdPop, numComply = thirdPop))
         for (_ <- 0 to limitSteps) {
           pop = move(pop, areaSize)
           pop = infect(pop, infection_radius, virus_infection_chance)
           pop = observation(pop, observation_radius)
-          pop = update_mindset(pop)
+          pop = updateMindset(pop)
         }
         // Calculate the ratios
         val c = pop.count(_.mind_status == Comply).toFloat / popSize
@@ -73,7 +74,7 @@ object PandemiaTransition extends JFXApp3 {
   }
 
   override def start(): Unit = {
-    val results = simulation(30,10)
+    val results = simulation(limitSteps = 1000, numSim = 10)
 
     val xAxis = new NumberAxis("Population Size", 100, 1000, 100)
     val yAxis = new NumberAxis("Ratio", 0, 1, 0.1)
