@@ -24,39 +24,47 @@ def saveChartAsPNG(chart: StackedAreaChart[Number, Number], filename: String): U
 
 object PandemiaTransition extends JFXApp3 {
   // Define constants
+  val limit_steps: Int = 1000
+  val number_simulation: Int = 10
+
+  val initially_infected: Int = 0
+
   val observation_radius: Int = 5
   val infection_radius: Float = 2
   val virus_infection_chance: Float = 0.9
 
-  val areaSize: Int = 100
-  val stepPopSize: Int = 100
-  val maxPopSize: Int = 1000
+  val step_pop_size: Int = 100
+  val min_pop_size: Int = 100
+  val max_pop_size: Int = 1000
 
-  var population = updateMindset(populationVector(size = 1, areaSize = areaSize, initiallyInfected = 0))
+  val area_size: Int = 100
+
+  // Declares the population variable
+  var population: Vector[Person] = Vector.empty[Person]
 
   def simulation(limitSteps: Int, numSim: Int): List[BehaviorData] = {
-    (100 to maxPopSize by stepPopSize).map { popSize =>
+    (min_pop_size to max_pop_size by step_pop_size).map { popSize =>
       val thirdPop = (popSize.toFloat/3).toInt
-      val (totalC, totalN, totalJ) = (1 to numSim).foldLeft((0f, 0f, 0f)) { (acc, _) =>
+      val (totalC, totalN, totalJ) = (1 to numSim).foldLeft((0, 0, 0)) { (acc, _) =>
         // Create a fresh population for each simulation run
-        var pop = updateMindset(populationVector(size = popSize, areaSize = areaSize, initiallyInfected = 0, numReject = thirdPop, numComply = thirdPop))
+        var pop = updateMindset(populationVector(size = popSize, areaSize = area_size, initiallyInfected = initially_infected, numReject = thirdPop, numComply = thirdPop))
         for (_ <- 0 to limitSteps) {
-          pop = move(pop, areaSize)
+          pop = move(pop, area_size)
           pop = infect(pop, infection_radius, virus_infection_chance)
           pop = observation(pop, observation_radius)
           pop = updateMindset(pop)
         }
         // Calculate the ratios
-        val c = pop.count(_.mind_status == Comply).toFloat / popSize
-        val n = pop.count(_.mind_status == Neutral).toFloat / popSize
-        val j = pop.count(_.mind_status == Reject).toFloat / popSize
+        val c = pop.count(_.mind_status == Comply)
+        val n = pop.count(_.mind_status == Neutral)
+        val j = pop.count(_.mind_status == Reject)
         (acc._1 + c, acc._2 + n, acc._3 + j)
       }
 
       // Average the ratios over numSim runs:
-      val avgC = totalC / numSim
-      val avgN = totalN / numSim
-      val avgJ = totalJ / numSim
+      val avgC = totalC.toFloat / (popSize * numSim)
+      val avgN = totalN.toFloat / (popSize * numSim)
+      val avgJ = totalJ.toFloat / (popSize * numSim)
 
       println(s"$popSize -> Comply: $avgC%.2f,\tNeutral: $avgN%.2f,\tReject: $avgJ%.2f,\tTotal: ${avgC + avgN + avgJ}%.2f")
 
@@ -74,7 +82,7 @@ object PandemiaTransition extends JFXApp3 {
   }
 
   override def start(): Unit = {
-    val results = simulation(limitSteps = 1000, numSim = 10)
+    val results = simulation(limitSteps = limit_steps, numSim = number_simulation)
 
     val xAxis = new NumberAxis("Population Size", 100, 1000, 100)
     val yAxis = new NumberAxis("Ratio", 0, 1, 0.1)

@@ -1,14 +1,12 @@
 package Pandemia
 
-import scalafx.application.JFXApp3
-import scalafx.scene.Scene
-import scalafx.scene.chart.{LineChart, NumberAxis, StackedAreaChart, XYChart}
+import scalafx.application.{JFXApp3, Platform}
 import scalafx.collections.ObservableBuffer
-import scalafx.application.Platform
+import scalafx.scene.Scene
+import scalafx.scene.chart.{NumberAxis, StackedAreaChart, XYChart}
 
-import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.collection.mutable.ArrayBuffer
+import scala.concurrent.Future
 
 object PandemiaSimPlot extends JFXApp3 {
 
