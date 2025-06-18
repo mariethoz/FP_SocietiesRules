@@ -98,7 +98,7 @@ The function `observation` models how individuals update their mindset (`Comply`
 |----------|-----------------------|------------------------------------------|---------------------------------|---------------|--------------|----------------|
 | Comply   | 2                     | 1                                        | −5                              | 2             | —            | −1             |
 | Neutral  | 7 (if majority)       | (+ if majority complier around else -) 5 | 7 (if majority)                 | 2             | —            | −2             |
-| Reject   | 5 (if Comply present) | −5                                       | (+ if complier around else -) 2 | 2             | −1           | −2             |
+| Reject   | 5 (if Comply present) | −5             7                         | (+ if complier around else -) 2 | 2             | −1           | −2             |
 
 ### PandemiaSim: Interactive Simulation Interface
 
